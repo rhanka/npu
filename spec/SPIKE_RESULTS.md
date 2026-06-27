@@ -128,3 +128,23 @@ Format déployable, base correcte pour AMD Quark et ORT ROCm EP.
 
 **Prochaine étape quantification** : environnement Python 3.12 dédié + AMD Quark,
 ou venv séparé pour le toolchain Ryzen AI. Hors du venv sidecar actuel (py3.14).
+
+---
+
+## Mise à jour — Frontière SWA validée ✅ 2026-06-27
+
+Le consensus P3 avait flaggé : *« WikiText-2 ne stresse jamais la frontière de la
+sliding window (2048) → un bug de masque SWA passe invisible. »*
+
+**Test** : séquence de **2100 tokens** (> sliding_window 2048), comparaison des
+logits PyTorch patché (FP32, full forward) vs ONNX full-context, sur les 50
+dernières positions (toutes post-frontière, exerçant SWA couches 0-9 +
+full-attention 10-14).
+
+| Métrique | Résultat |
+|---|---|
+| max abs diff logits | 2.15e-5 |
+| mean abs diff | 2.32e-6 |
+| top-1 match (50 pos > 2048) | **100%** |
+
+→ **La frontière SWA est correctement exportée.** Risque #3 du spec levé.
