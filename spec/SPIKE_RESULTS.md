@@ -104,3 +104,27 @@ Sortie identique : « Paris, and the capital of Spain is ».
 - Quantification AMD Quark INT8/AWQ sur le ONNX KV
 - Frontière SWA > 2048 tokens (transition couches 9→10)
 - Runtime : ORT ROCm EP (GPU) puis VitisAI EP (NPU)
+
+---
+
+## Mise à jour — FP16 + quantification INT8 (2026-06-27)
+
+### FP16 KV export ✅
+`export_kv.py --dtype fp16` → **4.4 GB** (moitié du FP32 8.7 GB).
+ORT validé : sortie identique « Paris, and the capital of Spain is ».
+Format déployable, base correcte pour AMD Quark et ORT ROCm EP.
+
+### INT8 via ORT quantize_dynamic ❌ — voie morte ici
+- Depuis FP32 (8.7 GB) : **OOM** (cap 32 GB, charge tout le modèle en RAM).
+- Depuis FP16 (4.4 GB) : produit un graphe **invalide** + **aucune réduction**
+  (4335 MB ≈ 4400 MB — quantize_dynamic exige du FP32 pour quantifier les poids).
+- De plus, `quantize_dynamic` cible le **CPUExecutionProvider** (dequant runtime),
+  pas l'accélération GPU/NPU visée.
+
+### Conclusion : INT8 passe par AMD Quark, pas ORT
+- `amd-quark` sur PyPI = placeholder (0.1.0), pas le vrai package.
+- Le vrai Quark : canal AMD/ROCm, **incompatible Python 3.14** (besoin ≤ 3.12).
+- C'est de toute façon la voie NPU correcte : Quark XINT8 → ONNX → VitisAI EP.
+
+**Prochaine étape quantification** : environnement Python 3.12 dédié + AMD Quark,
+ou venv séparé pour le toolchain Ryzen AI. Hors du venv sidecar actuel (py3.14).
