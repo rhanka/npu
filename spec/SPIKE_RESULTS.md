@@ -71,3 +71,36 @@ Prompt « The capital of France is » → PyTorch et ONNX prédisent tous deux `
 2. Quantification **AMD Quark INT8/AWQ** sur le ONNX FP16.
 3. Validation **frontière SWA** : prompt > 2048 tokens (transition couches 9→10).
 4. Compilation **VitisAI EP** pour le NPU (le vrai mur, cf. consensus P2).
+
+---
+
+## Mise à jour — KV-cache (D4) ✅ 2026-06-27
+
+Export ONNX **avec KV-cache** réussi et validé end-to-end.
+
+### Obstacles levés
+1. `dynamic_axes` non supporté par dynamo → `dynamic_shapes` (torch.export.Dim).
+2. `*past` varargs → 1 élément top-level (tuple de 30 dicts), pas 33.
+3. `scaled_dot_product_attention is_causal SymBool` → **forcer `attn_implementation="eager"`**
+   (matmul/softmax explicites, intégré au patch). Le modèle custom n'honore pas
+   l'arg à l'init → forcé sur config + sous-modules.
+4. seq spécialisé à 1 (torch.export squeeze les dims taille 1) → exemple
+   non-dégénéré T_new=3, past_seq=2.
+
+### Artefacts
+- `kv_wrapper.py` : wrapper tuple-de-tenseurs ↔ DynamicCache (transformers 5.12.1)
+- `export_kv.py` : graphe unique prefill (past_seq=0) + decode (past_seq>0)
+- 30 tenseurs cache E/S (15 couches × k,v), axes batch/seq/past_seq dynamiques
+
+### Validation
+| Test | Résultat |
+|---|---|
+| Wrapper KV vs full-recompute (PyTorch) | max diff 1.43e-5 sur 8 steps |
+| ONNX KV (ORT) vs PyTorch, prefill→decode 8 tokens | **100% token match** |
+
+Sortie identique : « Paris, and the capital of Spain is ».
+
+### Reste
+- Quantification AMD Quark INT8/AWQ sur le ONNX KV
+- Frontière SWA > 2048 tokens (transition couches 9→10)
+- Runtime : ORT ROCm EP (GPU) puis VitisAI EP (NPU)

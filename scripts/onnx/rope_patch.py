@@ -44,4 +44,15 @@ def patch_model_for_onnx(model):
 
     modeling.apply_rotary_emb = apply_rotary_emb_real
     inner._compute_freqs_cis = types.MethodType(_compute_freqs_cis_real, inner)
+
+    # Force l'attention eager (matmul/softmax explicites) : pas de SDPA is_causal
+    # SymBool lors de l'export à shapes dynamiques. Le modèle custom n'honore pas
+    # attn_implementation à l'init → on le force sur config + sous-modules.
+    model.config._attn_implementation = "eager"
+    for m in model.modules():
+        if hasattr(m, "_attn_implementation"):
+            m._attn_implementation = "eager"
+        sub = getattr(m, "config", None)
+        if sub is not None and hasattr(sub, "_attn_implementation"):
+            sub._attn_implementation = "eager"
     return model
